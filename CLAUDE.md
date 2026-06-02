@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git & GitHub
+
+**Remote:** `https://github.com/dylsonn/recipebook` (public, branch: `main`)
+
+After every meaningful change, commit and push:
+```bash
+git add <files>
+git commit -m "short description of what changed and why"
+git push
+```
+
+To revert to a previous state:
+```bash
+git log --oneline          # find the commit to revert to
+git revert <commit-sha>    # creates a new undo commit (safe)
+# or to reset the working tree to a specific commit:
+git checkout <commit-sha> -- <file>
+```
+
 ## Running the app
 
 Open `index.html` directly in a browser — no build step, no server required. All three files must stay in the same directory so the relative `href`/`src` references resolve.
