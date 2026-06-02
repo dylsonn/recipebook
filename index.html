@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecipeBook</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header>
+  <div class="logo">Recipe<span>Book</span></div>
+  <button class="btn btn-primary" onclick="showForm()">+ New Recipe</button>
+</header>
+
+<main>
+  <!-- List View -->
+  <div id="view-list" class="view active">
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="search" placeholder="Search recipes…" oninput="renderList()" />
+      </div>
+      <select id="filter-cat" onchange="renderList()">
+        <option value="">All categories</option>
+        <option>Breakfast</option><option>Lunch</option><option>Dinner</option>
+        <option>Dessert</option><option>Snack</option><option>Drink</option><option>Other</option>
+      </select>
+    </div>
+    <div class="grid" id="recipe-grid"></div>
+  </div>
+
+  <!-- Detail View -->
+  <div id="view-detail" class="view">
+    <button class="back-btn" onclick="showList()">← Back to recipes</button>
+    <div id="detail-content"></div>
+  </div>
+
+  <!-- Form View -->
+  <div id="view-form" class="view">
+    <button class="back-btn" onclick="showList()">← Back to recipes</button>
+    <div class="form-card">
+      <div class="form-title" id="form-title">Add New Recipe</div>
+      <form id="recipe-form" onsubmit="saveRecipe(event)">
+        <input type="hidden" id="edit-id" />
+
+        <div class="form-row">
+          <div class="field">
+            <label>Recipe Name *</label>
+            <input type="text" id="f-name" placeholder="e.g. Classic Chocolate Chip Cookies" required />
+          </div>
+        </div>
+
+        <div class="form-row col2">
+          <div class="field">
+            <label>Category</label>
+            <select class="field-input" id="f-category">
+              <option>Breakfast</option><option>Lunch</option><option selected>Dinner</option>
+              <option>Dessert</option><option>Snack</option><option>Drink</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Servings</label>
+            <input type="number" id="f-servings" placeholder="4" min="1" />
+          </div>
+        </div>
+
+        <div class="form-row col3">
+          <div class="field">
+            <label>Prep Time (min)</label>
+            <input type="number" id="f-prep" placeholder="15" min="0" />
+          </div>
+          <div class="field">
+            <label>Cook Time (min)</label>
+            <input type="number" id="f-cook" placeholder="30" min="0" />
+          </div>
+          <div class="field">
+            <label>Difficulty</label>
+            <select class="field-input" id="f-difficulty">
+              <option>Easy</option><option selected>Medium</option><option>Hard</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Description</label>
+            <textarea id="f-desc" placeholder="A short description of the dish…" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:8px">
+          <div class="field">
+            <label>Ingredients *</label>
+            <div class="dynamic-list" id="ingredients-list"></div>
+            <button type="button" class="add-row-btn" onclick="addIngredient()">+ Add ingredient</button>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:8px">
+          <div class="field">
+            <label>Instructions *</label>
+            <div class="dynamic-list" id="steps-list"></div>
+            <button type="button" class="add-row-btn" onclick="addStep()">+ Add step</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Notes (optional)</label>
+            <textarea id="f-notes" placeholder="Tips, substitutions, storage instructions…" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="form-footer">
+          <button type="submit" class="btn btn-primary">Save Recipe</button>
+          <button type="button" class="btn btn-ghost" onclick="showList()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
