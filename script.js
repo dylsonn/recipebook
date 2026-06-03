@@ -269,7 +269,7 @@ function renderDetail(id) {
       <div class="meta-item"><span class="meta-label">Difficulty</span><span class="meta-value">${esc(r.difficulty) || '—'}</span></div>
     </div>
 
-    ${r.photo ? `<img class="detail-photo" src="${r.photo}" alt="${esc(r.name)}" />` : ''}
+    ${r.photo ? `<img class="detail-photo detail-photo-mobile" src="${r.photo}" alt="${esc(r.name)}" />` : ''}
 
     <div class="two-col">
       <div>
@@ -277,6 +277,7 @@ function renderDetail(id) {
         ${renderGroupedIngredients(r.ingredients || [])}
       </div>
       <div>
+        ${r.photo ? `<img class="detail-photo detail-photo-desktop" src="${r.photo}" alt="${esc(r.name)}" />` : ''}
         <div class="section-title">Instructions</div>
         <ol class="steps-list">
           ${(r.steps || []).filter(Boolean).map((s, i) => `
