@@ -13,6 +13,139 @@ function fmt(min) {
 }
 function catClass(c) { return 'cat-' + (c || 'other').toLowerCase().replace(/\s+/, '-'); }
 
+// ── Ingredient grouping ───────────────────────────────────
+const INGREDIENT_GROUPS = [
+  {
+    label: 'Produce',
+    keywords: ['tomato', 'onion', 'garlic', 'lettuce', 'spinach', 'carrot', 'celery', 'pepper', 'mushroom',
+      'potato', 'cucumber', 'zucchini', 'broccoli', 'cauliflower', 'leek', 'shallot', 'cilantro', 'parsley',
+      'basil', 'chive', 'scallion', 'green onion', 'lemon', 'lime', 'orange', 'apple', 'berry', 'berries',
+      'ginger', 'kale', 'arugula', 'cabbage', 'bok choy', 'asparagus', 'eggplant', 'artichoke', 'corn',
+      'pea', 'green bean', 'avocado', 'mango', 'pineapple', 'banana', 'strawberry', 'blueberry', 'raspberry',
+      'blackberry', 'cherry', 'grape', 'peach', 'pear', 'plum', 'beet', 'radish', 'turnip', 'parsnip',
+      'squash', 'pumpkin', 'sweet potato', 'yam', 'jalapeño', 'jalapeno', 'serrano', 'habanero',
+      'fresh herb', 'fresh thyme', 'fresh rosemary', 'fresh sage', 'fresh mint', 'fresh dill'],
+  },
+  {
+    label: 'Proteins',
+    keywords: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'egg', 'tofu',
+      'tempeh', 'bacon', 'ham', 'sausage', 'turkey', 'lamb', 'steak', 'ground beef', 'ground pork',
+      'ground turkey', 'ground meat', 'crab', 'lobster', 'scallop', 'anchovy', 'sardine', 'tilapia',
+      'cod', 'halibut', 'duck', 'veal', 'bison', 'lentil', 'chickpea', 'black bean', 'kidney bean',
+      'pinto bean', 'navy bean', 'white bean', 'edamame', 'seitan', 'deli', 'pancetta', 'prosciutto'],
+  },
+  {
+    label: 'Dairy',
+    keywords: ['milk', 'cream', 'butter', 'cheese', 'yogurt', 'sour cream', 'buttermilk', 'half and half',
+      'heavy cream', 'whipping cream', 'cheddar', 'mozzarella', 'parmesan', 'feta', 'ricotta', 'brie',
+      'gouda', 'gruyere', 'cream cheese', 'cottage cheese', 'ghee', 'whey', 'kefir'],
+  },
+  {
+    label: 'Pantry',
+    keywords: ['flour', 'sugar', 'oil', 'olive oil', 'vegetable oil', 'canola oil', 'sesame oil', 'pasta',
+      'rice', 'bread', 'oat', 'quinoa', 'barley', 'couscous', 'noodle', 'spaghetti', 'penne', 'fettuccine',
+      'linguine', 'orzo', 'tortilla', 'panko', 'breadcrumb', 'stock', 'broth', 'canned', 'tomato paste',
+      'tomato sauce', 'coconut milk', 'honey', 'maple syrup', 'molasses', 'vinegar', 'soy sauce',
+      'fish sauce', 'oyster sauce', 'hoisin', 'worcestershire', 'hot sauce', 'ketchup', 'mustard',
+      'mayonnaise', 'tahini', 'miso', 'cornstarch', 'baking powder', 'baking soda', 'yeast', 'cocoa',
+      'chocolate', 'vanilla extract', 'almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'peanut',
+      'pine nut', 'sesame seed', 'flaxseed', 'chia', 'brown sugar', 'powdered sugar', 'lard', 'shortening'],
+  },
+  {
+    label: 'Seasonings & Spices',
+    keywords: ['salt', 'pepper', 'paprika', 'cumin', 'oregano', 'turmeric', 'cinnamon', 'cayenne',
+      'chili powder', 'garlic powder', 'onion powder', 'bay leaf', 'cardamom', 'coriander', 'nutmeg',
+      'clove', 'allspice', 'anise', 'dill', 'fennel seed', 'marjoram', 'mustard seed', 'mustard powder',
+      'saffron', 'tarragon', 'thyme', 'rosemary', 'sage', 'mint', 'smoked paprika', 'red pepper flake',
+      'white pepper', 'black pepper', 'seasoning', 'spice', 'rub', 'zest', 'extract'],
+  },
+];
+
+function groupIngredients(ingredients) {
+  const groups = {};
+  for (const ingredient of ingredients) {
+    const lower = ingredient.toLowerCase();
+    let matched = false;
+    for (const group of INGREDIENT_GROUPS) {
+      if (group.keywords.some(k => lower.includes(k))) {
+        if (!groups[group.label]) groups[group.label] = [];
+        groups[group.label].push(ingredient);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      if (!groups['Other']) groups['Other'] = [];
+      groups['Other'].push(ingredient);
+    }
+  }
+  return groups;
+}
+
+function renderGroupedIngredients(ingredients) {
+  const groups = groupIngredients(ingredients.filter(Boolean));
+  const order = INGREDIENT_GROUPS.map(g => g.label).concat(['Other']);
+  const presentGroups = order.filter(label => groups[label]);
+
+  // If everything landed in one group, render flat (no group header noise)
+  if (presentGroups.length === 1) {
+    return `<ul class="ingredients-list">
+      ${ingredients.filter(Boolean).map(i => `<li>${esc(i)}</li>`).join('')}
+    </ul>`;
+  }
+
+  return presentGroups.map(label => `
+    <div class="ingredient-group">
+      <div class="ingredient-group-label">${label}</div>
+      <ul class="ingredients-list">
+        ${groups[label].map(i => `<li>${esc(i)}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+
+// ── Photo handling ────────────────────────────────────────
+let currentEditPhoto = null;
+
+function compressImage(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let { width, height } = img;
+        if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  currentEditPhoto = await compressImage(file);
+  document.getElementById('photo-preview').src = currentEditPhoto;
+  document.getElementById('photo-preview').classList.add('visible');
+  document.getElementById('photo-placeholder').style.display = 'none';
+  document.getElementById('photo-remove-btn').style.display = 'inline-flex';
+}
+
+function removePhoto() {
+  currentEditPhoto = null;
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('photo-preview').classList.remove('visible');
+  document.getElementById('photo-placeholder').style.display = 'flex';
+  document.getElementById('photo-remove-btn').style.display = 'none';
+  document.getElementById('f-photo').value = '';
+}
+
 // ── Views ─────────────────────────────────────────────────
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -48,7 +181,9 @@ function renderList() {
   }
   grid.innerHTML = recipes.map(r => `
     <div class="card" onclick="showDetail('${r.id}')">
-      <div class="card-color ${catClass(r.category)}"></div>
+      ${r.photo
+        ? `<img class="card-img" src="${r.photo}" alt="${esc(r.name)}" />`
+        : `<div class="card-color ${catClass(r.category)}"></div>`}
       <div class="card-body">
         <div class="card-title">${esc(r.name)}</div>
         ${r.desc ? `<div class="card-desc">${esc(r.desc)}</div>` : ''}
@@ -88,12 +223,12 @@ function renderDetail(id) {
       <div class="meta-item"><span class="meta-label">Difficulty</span><span class="meta-value">${esc(r.difficulty) || '—'}</span></div>
     </div>
 
+    ${r.photo ? `<img class="detail-photo" src="${r.photo}" alt="${esc(r.name)}" />` : ''}
+
     <div class="two-col">
       <div>
         <div class="section-title">Ingredients</div>
-        <ul class="ingredients-list">
-          ${(r.ingredients || []).filter(Boolean).map(i => `<li>${esc(i)}</li>`).join('')}
-        </ul>
+        ${renderGroupedIngredients(r.ingredients || [])}
       </div>
       <div>
         <div class="section-title">Instructions</div>
@@ -123,6 +258,7 @@ function resetForm() {
   document.getElementById('steps-list').innerHTML = '';
   addIngredient(); addIngredient(); addIngredient();
   addStep(); addStep();
+  removePhoto();
 }
 
 function loadFormForEdit(id) {
@@ -138,6 +274,14 @@ function loadFormForEdit(id) {
   document.getElementById('f-difficulty').value = r.difficulty || 'Medium';
   document.getElementById('f-desc').value = r.desc || '';
   document.getElementById('f-notes').value = r.notes || '';
+
+  if (r.photo) {
+    currentEditPhoto = r.photo;
+    document.getElementById('photo-preview').src = r.photo;
+    document.getElementById('photo-preview').classList.add('visible');
+    document.getElementById('photo-placeholder').style.display = 'none';
+    document.getElementById('photo-remove-btn').style.display = 'inline-flex';
+  }
 
   const il = document.getElementById('ingredients-list');
   const sl = document.getElementById('steps-list');
@@ -184,6 +328,7 @@ function saveRecipe(e) {
     difficulty: document.getElementById('f-difficulty').value,
     desc: document.getElementById('f-desc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
+    photo: currentEditPhoto || null,
     ingredients,
     steps,
     updatedAt: Date.now(),
