@@ -14,50 +14,91 @@ function fmt(min) {
 function catClass(c) { return 'cat-' + (c || 'other').toLowerCase().replace(/\s+/, '-'); }
 
 // ── Ingredient grouping ───────────────────────────────────
+
+// These terms would match a seasoning keyword ("pepper", "garlic") if run through
+// normal group matching — force them directly to Produce before the main loop runs.
+const PRODUCE_OVERRIDES = [
+  'bell pepper', 'red pepper', 'green pepper', 'yellow pepper', 'orange pepper',
+  'sweet pepper', 'chili pepper', 'chile pepper', 'poblano', 'anaheim', 'pasilla',
+  'banana pepper', 'jalapeño', 'jalapeno', 'habanero', 'serrano',
+  'garlic clove', 'garlic bulb', 'head of garlic', 'clove of garlic', 'cloves garlic',
+  'cloves of garlic', 'whole garlic', 'fresh ginger', 'ginger root', 'ginger knob',
+];
+
+// Groups are checked in order — Seasonings & Spices is first so compound terms like
+// "garlic powder" and "black pepper" match before the bare keywords in Produce.
 const INGREDIENT_GROUPS = [
   {
-    label: 'Produce',
-    keywords: ['tomato', 'onion', 'garlic', 'lettuce', 'spinach', 'carrot', 'celery', 'pepper', 'mushroom',
-      'potato', 'cucumber', 'zucchini', 'broccoli', 'cauliflower', 'leek', 'shallot', 'cilantro', 'parsley',
-      'basil', 'chive', 'scallion', 'green onion', 'lemon', 'lime', 'orange', 'apple', 'berry', 'berries',
-      'ginger', 'kale', 'arugula', 'cabbage', 'bok choy', 'asparagus', 'eggplant', 'artichoke', 'corn',
-      'pea', 'green bean', 'avocado', 'mango', 'pineapple', 'banana', 'strawberry', 'blueberry', 'raspberry',
-      'blackberry', 'cherry', 'grape', 'peach', 'pear', 'plum', 'beet', 'radish', 'turnip', 'parsnip',
-      'squash', 'pumpkin', 'sweet potato', 'yam', 'jalapeño', 'jalapeno', 'serrano', 'habanero',
-      'fresh herb', 'fresh thyme', 'fresh rosemary', 'fresh sage', 'fresh mint', 'fresh dill'],
+    label: 'Seasonings & Spices',
+    keywords: [
+      'salt', 'pepper', 'black pepper', 'white pepper', 'ground pepper', 'cracked pepper', 'peppercorn',
+      'paprika', 'smoked paprika', 'cumin', 'ground cumin', 'oregano', 'turmeric', 'cinnamon',
+      'ground cinnamon', 'cayenne', 'chili powder', 'ancho powder', 'chipotle powder',
+      'garlic powder', 'garlic salt', 'garlic flake', 'onion powder', 'onion salt', 'onion flake',
+      'bay leaf', 'cardamom', 'coriander', 'nutmeg', 'ground nutmeg', 'clove', 'allspice',
+      'star anise', 'anise', 'dill weed', 'dill seed', 'fennel seed', 'marjoram',
+      'mustard seed', 'mustard powder', 'dry mustard', 'saffron', 'tarragon',
+      'thyme', 'rosemary', 'sage', 'mint', 'basil', 'cilantro', 'parsley', 'chive',
+      'red pepper flake', 'crushed red pepper', 'chili flake', 'italian seasoning',
+      'herbes de provence', 'five spice', "za'atar", 'sumac', 'old bay', 'cajun',
+      'seasoning', 'spice blend', 'spice rub', 'dry rub', 'zest', 'extract', 'vanilla',
+    ],
   },
   {
     label: 'Proteins',
-    keywords: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'egg', 'tofu',
-      'tempeh', 'bacon', 'ham', 'sausage', 'turkey', 'lamb', 'steak', 'ground beef', 'ground pork',
-      'ground turkey', 'ground meat', 'crab', 'lobster', 'scallop', 'anchovy', 'sardine', 'tilapia',
-      'cod', 'halibut', 'duck', 'veal', 'bison', 'lentil', 'chickpea', 'black bean', 'kidney bean',
-      'pinto bean', 'navy bean', 'white bean', 'edamame', 'seitan', 'deli', 'pancetta', 'prosciutto'],
+    keywords: [
+      'chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'egg',
+      'tofu', 'tempeh', 'seitan', 'bacon', 'ham', 'sausage', 'turkey', 'lamb', 'steak',
+      'ground beef', 'ground pork', 'ground turkey', 'ground chicken', 'ground meat',
+      'crab', 'lobster', 'scallop', 'anchovy', 'sardine', 'tilapia', 'cod', 'halibut',
+      'sea bass', 'trout', 'mahi', 'duck', 'veal', 'bison', 'venison',
+      'lentil', 'chickpea', 'black bean', 'kidney bean', 'pinto bean', 'navy bean',
+      'white bean', 'cannellini', 'edamame', 'pancetta', 'prosciutto', 'pepperoni', 'salami',
+    ],
   },
   {
     label: 'Dairy',
-    keywords: ['milk', 'cream', 'butter', 'cheese', 'yogurt', 'sour cream', 'buttermilk', 'half and half',
-      'heavy cream', 'whipping cream', 'cheddar', 'mozzarella', 'parmesan', 'feta', 'ricotta', 'brie',
-      'gouda', 'gruyere', 'cream cheese', 'cottage cheese', 'ghee', 'whey', 'kefir'],
+    keywords: [
+      'milk', 'cream', 'butter', 'cheese', 'yogurt', 'sour cream', 'buttermilk',
+      'half and half', 'heavy cream', 'whipping cream', 'light cream',
+      'cheddar', 'mozzarella', 'parmesan', 'feta', 'ricotta', 'brie', 'gouda',
+      'gruyere', 'cream cheese', 'cottage cheese', 'mascarpone', 'burrata', 'ghee', 'kefir',
+    ],
   },
   {
     label: 'Pantry',
-    keywords: ['flour', 'sugar', 'oil', 'olive oil', 'vegetable oil', 'canola oil', 'sesame oil', 'pasta',
-      'rice', 'bread', 'oat', 'quinoa', 'barley', 'couscous', 'noodle', 'spaghetti', 'penne', 'fettuccine',
-      'linguine', 'orzo', 'tortilla', 'panko', 'breadcrumb', 'stock', 'broth', 'canned', 'tomato paste',
-      'tomato sauce', 'coconut milk', 'honey', 'maple syrup', 'molasses', 'vinegar', 'soy sauce',
-      'fish sauce', 'oyster sauce', 'hoisin', 'worcestershire', 'hot sauce', 'ketchup', 'mustard',
-      'mayonnaise', 'tahini', 'miso', 'cornstarch', 'baking powder', 'baking soda', 'yeast', 'cocoa',
-      'chocolate', 'vanilla extract', 'almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'peanut',
-      'pine nut', 'sesame seed', 'flaxseed', 'chia', 'brown sugar', 'powdered sugar', 'lard', 'shortening'],
+    keywords: [
+      'flour', 'sugar', 'brown sugar', 'powdered sugar', 'confectioners',
+      'oil', 'olive oil', 'vegetable oil', 'canola oil', 'sesame oil', 'coconut oil', 'avocado oil',
+      'pasta', 'rice', 'bread', 'oat', 'quinoa', 'barley', 'couscous', 'farro', 'bulgur',
+      'noodle', 'spaghetti', 'penne', 'fettuccine', 'linguine', 'orzo', 'rigatoni', 'fusilli',
+      'tortilla', 'pita', 'naan', 'panko', 'breadcrumb',
+      'stock', 'broth', 'tomato paste', 'tomato sauce', 'crushed tomato', 'diced tomato', 'canned',
+      'coconut milk', 'coconut cream',
+      'honey', 'maple syrup', 'molasses', 'agave', 'corn syrup',
+      'vinegar', 'balsamic', 'apple cider vinegar', 'rice vinegar',
+      'soy sauce', 'tamari', 'fish sauce', 'oyster sauce', 'hoisin', 'worcestershire',
+      'hot sauce', 'sriracha', 'tabasco', 'ketchup', 'mustard', 'mayonnaise', 'tahini', 'miso',
+      'cornstarch', 'arrowroot', 'baking powder', 'baking soda', 'yeast',
+      'cocoa', 'chocolate', 'chocolate chip',
+      'almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'peanut', 'pine nut', 'hazelnut',
+      'sesame seed', 'sunflower seed', 'pumpkin seed', 'flaxseed', 'chia seed',
+      'lard', 'shortening',
+    ],
   },
   {
-    label: 'Seasonings & Spices',
-    keywords: ['salt', 'pepper', 'paprika', 'cumin', 'oregano', 'turmeric', 'cinnamon', 'cayenne',
-      'chili powder', 'garlic powder', 'onion powder', 'bay leaf', 'cardamom', 'coriander', 'nutmeg',
-      'clove', 'allspice', 'anise', 'dill', 'fennel seed', 'marjoram', 'mustard seed', 'mustard powder',
-      'saffron', 'tarragon', 'thyme', 'rosemary', 'sage', 'mint', 'smoked paprika', 'red pepper flake',
-      'white pepper', 'black pepper', 'seasoning', 'spice', 'rub', 'zest', 'extract'],
+    label: 'Produce',
+    keywords: [
+      'tomato', 'onion', 'garlic', 'lettuce', 'spinach', 'carrot', 'celery', 'mushroom',
+      'potato', 'cucumber', 'zucchini', 'broccoli', 'cauliflower', 'leek', 'shallot',
+      'scallion', 'green onion', 'lemon', 'lime', 'orange', 'apple', 'ginger',
+      'berry', 'berries', 'kale', 'arugula', 'cabbage', 'bok choy', 'asparagus',
+      'eggplant', 'artichoke', 'corn', 'pea', 'green bean', 'snap pea',
+      'avocado', 'mango', 'pineapple', 'banana', 'strawberry', 'blueberry', 'raspberry',
+      'blackberry', 'cherry', 'grape', 'peach', 'pear', 'plum', 'pomegranate',
+      'beet', 'radish', 'turnip', 'parsnip', 'fennel', 'squash', 'pumpkin',
+      'sweet potato', 'yam', 'pepper',
+    ],
   },
 ];
 
@@ -65,18 +106,23 @@ function groupIngredients(ingredients) {
   const groups = {};
   for (const ingredient of ingredients) {
     const lower = ingredient.toLowerCase();
+
+    // Produce overrides run first — these would otherwise match a seasoning keyword
+    if (PRODUCE_OVERRIDES.some(k => lower.includes(k))) {
+      (groups['Produce'] = groups['Produce'] || []).push(ingredient);
+      continue;
+    }
+
     let matched = false;
     for (const group of INGREDIENT_GROUPS) {
       if (group.keywords.some(k => lower.includes(k))) {
-        if (!groups[group.label]) groups[group.label] = [];
-        groups[group.label].push(ingredient);
+        (groups[group.label] = groups[group.label] || []).push(ingredient);
         matched = true;
         break;
       }
     }
     if (!matched) {
-      if (!groups['Other']) groups['Other'] = [];
-      groups['Other'].push(ingredient);
+      (groups['Other'] = groups['Other'] || []).push(ingredient);
     }
   }
   return groups;
@@ -87,7 +133,7 @@ function renderGroupedIngredients(ingredients) {
   const order = INGREDIENT_GROUPS.map(g => g.label).concat(['Other']);
   const presentGroups = order.filter(label => groups[label]);
 
-  // If everything landed in one group, render flat (no group header noise)
+  // Render flat if everything ended up in a single group
   if (presentGroups.length === 1) {
     return `<ul class="ingredients-list">
       ${ingredients.filter(Boolean).map(i => `<li>${esc(i)}</li>`).join('')}
