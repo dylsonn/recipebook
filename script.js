@@ -243,28 +243,44 @@ const NUTRITION_DB = [
 
 // Default gram weight for items usually counted (no unit), keyed by partial name
 const COUNTABLE_WEIGHTS = {
-  'egg':           50,
-  'tomato':       120,
-  'onion':        110,
-  'lemon':         65,
-  'lime':          44,
-  'orange':       130,
-  'apple':        182,
-  'banana':       118,
-  'avocado':      200,
-  'potato':       150,
-  'sweet potato': 130,
-  'garlic clove':   3,
-  'clove garlic':   3,
-  'cloves garlic':  3,
-  'garlic cloves':  3,
-  'jalapeño':      14,
-  'jalapeno':      14,
-  'bell pepper':  120,
-  'mushroom':      20,
-  'tortilla':      45,
-  'slice bread':   30,
-  'piece':         80,
+  // proteins
+  'chicken breast':  170,
+  'chicken thigh':    85,
+  'chicken drumstick':70,
+  'chicken leg':     130,
+  'salmon fillet':   170,
+  'salmon steak':    170,
+  'tilapia fillet':  140,
+  'cod fillet':      140,
+  'shrimp':           14,  // per piece (large shrimp ≈ 14g)
+  'prawn':            14,
+  'scallop':          30,
+  'bacon strip':      15,
+  'sausage link':     70,
+  'egg':              50,
+  // produce
+  'tomato':          120,
+  'onion':           110,
+  'lemon':            65,
+  'lime':             44,
+  'orange':          130,
+  'apple':           182,
+  'banana':          118,
+  'avocado':         200,
+  'potato':          150,
+  'sweet potato':    130,
+  'garlic clove':      3,
+  'clove garlic':      3,
+  'cloves garlic':     3,
+  'garlic cloves':     3,
+  'jalapeño':         14,
+  'jalapeno':         14,
+  'bell pepper':     120,
+  'mushroom':         20,
+  // pantry / other
+  'tortilla':         45,
+  'slice bread':      30,
+  'piece':            80,
 };
 
 const VOLUME_TO_ML = {
@@ -405,20 +421,26 @@ function loadImageForCrop(dataUrl) {
     cropState.src = dataUrl;
     cropState.naturalW = img.naturalWidth;
     cropState.naturalH = img.naturalHeight;
-    const container = document.getElementById('crop-container');
-    const size = container.offsetWidth;
-    cropState.containerSize = size;
-    const minScale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
-    cropState.minScale = minScale;
-    cropState.scale = minScale;
-    cropState.offsetX = (size - img.naturalWidth * minScale) / 2;
-    cropState.offsetY = (size - img.naturalHeight * minScale) / 2;
-    document.getElementById('crop-zoom').value = 100;
+
+    // Show the editor BEFORE measuring offsetWidth — a hidden element reports 0
     document.getElementById('crop-image').src = dataUrl;
-    applyCropTransform();
     document.getElementById('photo-empty').style.display = 'none';
     document.getElementById('photo-editor').style.display = 'block';
-    setupCropDrag();
+
+    // RAF lets the browser compute layout so offsetWidth is accurate
+    requestAnimationFrame(() => {
+      const container = document.getElementById('crop-container');
+      const size = container.offsetWidth;
+      cropState.containerSize = size;
+      const minScale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+      cropState.minScale = minScale;
+      cropState.scale = minScale;
+      cropState.offsetX = (size - img.naturalWidth * minScale) / 2;
+      cropState.offsetY = (size - img.naturalHeight * minScale) / 2;
+      document.getElementById('crop-zoom').value = 100;
+      applyCropTransform();
+      setupCropDrag();
+    });
   };
   img.src = dataUrl;
 }
@@ -557,8 +579,8 @@ function showList() { renderList(); showView('view-list'); }
 function showDetail(id) { renderDetail(id); showView('view-detail'); }
 function showForm(id) {
   resetForm();
+  showView('view-form');        // show first so crop container has layout dimensions
   if (id) loadFormForEdit(id);
-  showView('view-form');
 }
 
 // ── List ──────────────────────────────────────────────────
@@ -663,6 +685,25 @@ function deleteRecipe(id) {
 }
 
 // ── Form ──────────────────────────────────────────────────
+function recalculateFormMacros() {
+  const ingredients = [...document.querySelectorAll('#ingredients-list input')]
+    .map(i => i.value.trim()).filter(Boolean);
+  const servings = parseInt(document.getElementById('f-servings').value) || 1;
+  const macros = estimateMacros(ingredients, servings);
+  const el = document.getElementById('form-macro-values');
+  if (!macros) {
+    el.innerHTML = '<span class="form-macro-hint">Could not estimate — use quantities like "1 lb chicken", "2 cups flour", "6 shrimp"</span>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="form-macro-item"><span class="form-macro-val">${macros.cal}</span><span class="form-macro-lbl">Calories</span></div>
+    <div class="form-macro-item"><span class="form-macro-val">${macros.protein}g</span><span class="form-macro-lbl">Protein</span></div>
+    <div class="form-macro-item"><span class="form-macro-val">${macros.carbs}g</span><span class="form-macro-lbl">Carbs</span></div>
+    <div class="form-macro-item"><span class="form-macro-val">${macros.fat}g</span><span class="form-macro-lbl">Fat</span></div>
+    <div class="form-macro-item"><span class="form-macro-val">${macros.fiber}g</span><span class="form-macro-lbl">Fiber</span></div>
+  `;
+}
+
 function resetForm() {
   document.getElementById('recipe-form').reset();
   document.getElementById('edit-id').value = '';
@@ -672,6 +713,8 @@ function resetForm() {
   addIngredient(); addIngredient(); addIngredient();
   addStep(); addStep();
   removePhoto();
+  document.getElementById('form-macro-values').innerHTML =
+    '<span class="form-macro-hint">Add ingredients above and click Recalculate</span>';
 }
 
 function loadFormForEdit(id) {
@@ -693,6 +736,7 @@ function loadFormForEdit(id) {
   il.innerHTML = ''; sl.innerHTML = '';
   (r.ingredients || ['']).forEach(v => addIngredient(v));
   (r.steps || ['']).forEach(v => addStep(v));
+  if (r.ingredients && r.ingredients.length) recalculateFormMacros();
 }
 
 function addIngredient(val = '') {

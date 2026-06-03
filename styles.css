@@ -222,6 +222,55 @@ select {
   margin-left: auto;
 }
 
+/* ── Form macro section ── */
+.macro-calc-tag {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+.form-macros-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  flex-wrap: wrap;
+}
+.form-macro-values {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.form-macro-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.form-macro-val {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+.form-macro-lbl {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+.form-macro-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
 @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
 
