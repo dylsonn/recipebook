@@ -107,7 +107,6 @@ function groupIngredients(ingredients) {
   for (const ingredient of ingredients) {
     const lower = ingredient.toLowerCase();
 
-    // Produce overrides run first — these would otherwise match a seasoning keyword
     if (PRODUCE_OVERRIDES.some(k => lower.includes(k))) {
       (groups['Produce'] = groups['Produce'] || []).push(ingredient);
       continue;
@@ -133,7 +132,6 @@ function renderGroupedIngredients(ingredients) {
   const order = INGREDIENT_GROUPS.map(g => g.label).concat(['Other']);
   const presentGroups = order.filter(label => groups[label]);
 
-  // Render flat if everything ended up in a single group
   if (presentGroups.length === 1) {
     return `<ul class="ingredients-list">
       ${ingredients.filter(Boolean).map(i => `<li>${esc(i)}</li>`).join('')}
@@ -150,22 +148,140 @@ function renderGroupedIngredients(ingredients) {
   `).join('');
 }
 
-// ── Photo handling ────────────────────────────────────────
-let currentEditPhoto = null;
+// ── Photo / Crop editor ───────────────────────────────────
+const cropState = {
+  src: null,
+  naturalW: 0, naturalH: 0,
+  containerSize: 0,
+  minScale: 1, scale: 1,
+  offsetX: 0, offsetY: 0,
+  isDragging: false,
+  dragStartX: 0, dragStartY: 0,
+  startOffsetX: 0, startOffsetY: 0,
+};
+let savedPhoto = null;    // existing saved photo when editing
+let cropDragCleanup = null;
 
-function compressImage(file) {
+function loadImageForCrop(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    cropState.src = dataUrl;
+    cropState.naturalW = img.naturalWidth;
+    cropState.naturalH = img.naturalHeight;
+
+    const container = document.getElementById('crop-container');
+    const size = container.offsetWidth;
+    cropState.containerSize = size;
+
+    // minScale fills the container with no gaps
+    const minScale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+    cropState.minScale = minScale;
+    cropState.scale = minScale;
+    // Center the image
+    cropState.offsetX = (size - img.naturalWidth * minScale) / 2;
+    cropState.offsetY = (size - img.naturalHeight * minScale) / 2;
+
+    document.getElementById('crop-zoom').value = 100;
+    document.getElementById('crop-image').src = dataUrl;
+    applyCropTransform();
+
+    document.getElementById('photo-empty').style.display = 'none';
+    document.getElementById('photo-editor').style.display = 'block';
+    setupCropDrag();
+  };
+  img.src = dataUrl;
+}
+
+function applyCropTransform() {
+  const el = document.getElementById('crop-image');
+  const { naturalW, naturalH, scale, offsetX, offsetY } = cropState;
+  el.style.left   = offsetX + 'px';
+  el.style.top    = offsetY + 'px';
+  el.style.width  = (naturalW * scale) + 'px';
+  el.style.height = (naturalH * scale) + 'px';
+}
+
+function clampCropOffsets() {
+  const { naturalW, naturalH, scale, containerSize } = cropState;
+  const dW = naturalW * scale, dH = naturalH * scale;
+  cropState.offsetX = dW <= containerSize
+    ? (containerSize - dW) / 2
+    : Math.min(0, Math.max(containerSize - dW, cropState.offsetX));
+  cropState.offsetY = dH <= containerSize
+    ? (containerSize - dH) / 2
+    : Math.min(0, Math.max(containerSize - dH, cropState.offsetY));
+}
+
+function onCropZoom(value) {
+  const { minScale, containerSize } = cropState;
+  const cx = containerSize / 2, cy = containerSize / 2;
+  // Keep the image point currently at the center fixed during zoom
+  const imgCX = (cx - cropState.offsetX) / cropState.scale;
+  const imgCY = (cy - cropState.offsetY) / cropState.scale;
+  cropState.scale = minScale * (value / 100);
+  cropState.offsetX = cx - imgCX * cropState.scale;
+  cropState.offsetY = cy - imgCY * cropState.scale;
+  clampCropOffsets();
+  applyCropTransform();
+}
+
+function setupCropDrag() {
+  if (cropDragCleanup) cropDragCleanup();
+  const container = document.getElementById('crop-container');
+
+  const startDrag = (x, y) => {
+    cropState.isDragging = true;
+    cropState.dragStartX = x; cropState.dragStartY = y;
+    cropState.startOffsetX = cropState.offsetX;
+    cropState.startOffsetY = cropState.offsetY;
+  };
+  const moveDrag = (x, y) => {
+    if (!cropState.isDragging) return;
+    cropState.offsetX = cropState.startOffsetX + (x - cropState.dragStartX);
+    cropState.offsetY = cropState.startOffsetY + (y - cropState.dragStartY);
+    clampCropOffsets();
+    applyCropTransform();
+  };
+  const endDrag = () => { cropState.isDragging = false; };
+
+  const onMouseDown  = e => { e.preventDefault(); startDrag(e.clientX, e.clientY); };
+  const onMouseMove  = e => moveDrag(e.clientX, e.clientY);
+  const onTouchStart = e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); };
+  const onTouchMove  = e => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); };
+
+  container.addEventListener('mousedown',  onMouseDown);
+  document.addEventListener('mousemove',   onMouseMove);
+  document.addEventListener('mouseup',     endDrag);
+  container.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchmove',   onTouchMove,  { passive: false });
+  document.addEventListener('touchend',    endDrag);
+
+  cropDragCleanup = () => {
+    container.removeEventListener('mousedown',  onMouseDown);
+    document.removeEventListener('mousemove',   onMouseMove);
+    document.removeEventListener('mouseup',     endDrag);
+    container.removeEventListener('touchstart', onTouchStart);
+    document.removeEventListener('touchmove',   onTouchMove);
+    document.removeEventListener('touchend',    endDrag);
+  };
+}
+
+function resizeForCrop(file) {
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 800;
-        let { width, height } = img;
-        if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.75));
+        const MAX = 1200;
+        let { width: w, height: h } = img;
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.9));
       };
       img.src = e.target.result;
     };
@@ -176,19 +292,38 @@ function compressImage(file) {
 async function handlePhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
-  currentEditPhoto = await compressImage(file);
-  document.getElementById('photo-preview').src = currentEditPhoto;
-  document.getElementById('photo-preview').classList.add('visible');
-  document.getElementById('photo-placeholder').style.display = 'none';
-  document.getElementById('photo-remove-btn').style.display = 'inline-flex';
+  const resized = await resizeForCrop(file);
+  loadImageForCrop(resized);
+}
+
+function renderCroppedPhoto() {
+  return new Promise(resolve => {
+    const { src, scale, offsetX, offsetY, containerSize } = cropState;
+    const OUTPUT = 600;
+    const canvas = document.createElement('canvas');
+    canvas.width = OUTPUT; canvas.height = OUTPUT;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      // Derive the source rect: what portion of the original image is visible
+      const srcX = -offsetX / scale;
+      const srcY = -offsetY / scale;
+      const srcW = containerSize / scale;
+      const srcH = containerSize / scale;
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, OUTPUT, OUTPUT);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = src;
+  });
 }
 
 function removePhoto() {
-  currentEditPhoto = null;
-  document.getElementById('photo-preview').src = '';
-  document.getElementById('photo-preview').classList.remove('visible');
-  document.getElementById('photo-placeholder').style.display = 'flex';
-  document.getElementById('photo-remove-btn').style.display = 'none';
+  cropState.src = null;
+  savedPhoto = null;
+  if (cropDragCleanup) { cropDragCleanup(); cropDragCleanup = null; }
+  document.getElementById('crop-image').src = '';
+  document.getElementById('photo-editor').style.display = 'none';
+  document.getElementById('photo-empty').style.display = 'flex';
   document.getElementById('f-photo').value = '';
 }
 
@@ -323,11 +458,8 @@ function loadFormForEdit(id) {
   document.getElementById('f-notes').value = r.notes || '';
 
   if (r.photo) {
-    currentEditPhoto = r.photo;
-    document.getElementById('photo-preview').src = r.photo;
-    document.getElementById('photo-preview').classList.add('visible');
-    document.getElementById('photo-placeholder').style.display = 'none';
-    document.getElementById('photo-remove-btn').style.display = 'inline-flex';
+    savedPhoto = r.photo;
+    loadImageForCrop(r.photo);
   }
 
   const il = document.getElementById('ingredients-list');
@@ -355,13 +487,18 @@ function addStep(val = '') {
   if (!val) row.querySelector('textarea').focus();
 }
 
-function saveRecipe(e) {
+async function saveRecipe(e) {
   e.preventDefault();
   const ingredients = [...document.querySelectorAll('#ingredients-list input')].map(i => i.value.trim()).filter(Boolean);
   const steps = [...document.querySelectorAll('#steps-list textarea')].map(t => t.value.trim()).filter(Boolean);
 
   if (!ingredients.length) { alert('Add at least one ingredient.'); return; }
   if (!steps.length) { alert('Add at least one instruction step.'); return; }
+
+  // Render the crop to a square JPEG if an image is loaded; otherwise keep existing
+  let photo = null;
+  if (cropState.src) photo = await renderCroppedPhoto();
+  else if (savedPhoto)  photo = savedPhoto;
 
   const recipes = load();
   const editId = document.getElementById('edit-id').value;
@@ -375,7 +512,7 @@ function saveRecipe(e) {
     difficulty: document.getElementById('f-difficulty').value,
     desc: document.getElementById('f-desc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
-    photo: currentEditPhoto || null,
+    photo,
     ingredients,
     steps,
     updatedAt: Date.now(),
